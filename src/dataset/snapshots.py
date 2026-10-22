@@ -17,6 +17,9 @@ class Snapshot:
     # solved: event = 1, time_to_event = solve_step - k (>= 1) 
     # timed out: event = 0, time_to_event = n_ops - k (censored, 0 means no later step seen)
 
+    n_backtracks: int = 0 # backtrack counts
+    n_subgoals: int = 0 # subgoals counts
+
 @dataclass
 class AttemptSnapshots:
     snapshots: list = field(default_factory=list)
@@ -73,9 +76,23 @@ def snapshots_for_attempt(code: str, correct: float):
             last_input = reach[0] - 1
 
     k = 0
+    n_back = n_sub = 0
+    position = None # current location
     for a, builder in _replay(g.actions):
+        if a["type"] == "start":
+            position = tuple(sorted(a["state"]))
+            continue
+        if a["type"] == "move_to_node":
+            if tuple(a["new_state"]) != position:
+                n_back += 1
+            position = tuple(a["new_state"])
+            continue
+        if a["type"] == "set_subgoal":
+            n_sub += 1
+            continue
         if a["type"] != "explore_operation":
             continue
+        position = tuple(a["resulting_state"])
         k += 1
         if k > last_input:
             break
@@ -84,5 +101,5 @@ def snapshots_for_attempt(code: str, correct: float):
             event, tte = 1, out.solve_step - k
         else:
             event, tte = 0, n_ops - k
-        out.snapshots.append(Snapshot(k, gc, tuple(a["resulting_state"]), event, tte))
+        out.snapshots.append(Snapshot(k, gc, tuple(a["resulting_state"]), event, tte, n_back, n_sub))
     return out

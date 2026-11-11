@@ -67,4 +67,29 @@ def test_shapes_and_values_are_finite():
         assert s["edge_attr"].shape[0] == s["edge_index"].shape[1]
         assert np.isfinite(s["x"]).all() and np.isfinite(s["edge_attr"]).all()
 
+def test_state_tuples_are_stored_and_consistent():
+    # is_current row should be the snapshot's current_state
+    cur = NODE_COLS.index("is_current")
+    exceptions = 0
+    for s in SNAPS:
+        assert len(s["nodes"]) == s["x"].shape[0]
+        flagged = np.where(s["x"][:, cur] == 1)[0]
+        assert len(flagged) <= 1
+        if len(flagged) != 1 or tuple(s["nodes"][flagged[0]]) != tuple(sorted(s["current_state"])):
+            exceptions += 1
+    assert exceptions <= 5, exceptions
+
+def test_quotes_are_available_and_never_run_ahead():
+    from src.dataset.cache import load_quotes
+    quotes = load_quotes()
+    last = {}
+    for s in SNAPS:
+        q = quotes[(s["pid"], s["trial_index"])]
+        assert s["n_comments"] <= len(q)
+        assert s["n_comments"] >= last.get((s["pid"], s["trial_index"]), 0)   # text only ever grows
+        last[(s["pid"], s["trial_index"])] = s["n_comments"]
+    # nothing is stored past the last snapshot of an attempt
+    for key, q in quotes.items():
+        assert len(q) == last.get(key, 0)
+
 # python -m pytest tests/test_dataset.py

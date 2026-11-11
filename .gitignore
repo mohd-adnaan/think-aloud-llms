@@ -169,3 +169,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+
+# just run python -m src.dataset.cache 
+data/cache/ 
+# for puzzle only baseline, python -m src.baselines.puzzle_only
+data/predictions/

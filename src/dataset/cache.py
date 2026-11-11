@@ -9,10 +9,21 @@ CACHE_DIR = ROOT / "data/cache"
 DATASET_PATH = CACHE_DIR / "dataset_v1.pkl"
 ATTEMPTS_PATH = CACHE_DIR / "attempts_v1.csv"
 
+def _suffix(coder: str) -> str:
+    return "" if coder == DEFAULT_CODER else f"_{coder}"
+
+
+def dataset_path(coder: str = DEFAULT_CODER):
+    return CACHE_DIR / f"dataset_v1{_suffix(coder)}.pkl"
+
+
+def attempts_path(coder: str = DEFAULT_CODER):
+    return CACHE_DIR / f"attempts_v1{_suffix(coder)}.csv"
+
 def build(coder: str = DEFAULT_CODER):
     trials = load_trials(coder)
     folds = load_folds().set_index(["pid", "trial_index"])
-    snapshots, attempts = [], []
+    snapshots, attempts, quotes = [], [], {}
 
     for r in trials.itertuples():
         a = snapshots_for_attempt(r.lm_code_translation, r.correct)
@@ -29,8 +40,10 @@ def build(coder: str = DEFAULT_CODER):
                 step=s.step, event=s.event, time_to_event=s.time_to_event,
                 n_backtracks=s.n_backtracks, n_subgoals=s.n_subgoals,
                 x=f["x"], edge_index=f["edge_index"], edge_attr=f["edge_attr"],
+                nodes=f["nodes"], current_state=s.current_state, n_comments=s.n_comments,
             ))
 
+        quotes[(r.pid, r.trial_index)] = a.comments
         # attempts for further analysis
         attempts.append(dict(
             pid=r.pid, trial_index=r.trial_index, ran=True, puzzle=fo["puzzle"],
@@ -43,20 +56,29 @@ def build(coder: str = DEFAULT_CODER):
                 node_cols=NODE_COLS, edge_cols=EDGE_COLS)
     
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
-    with open(DATASET_PATH, "wb") as fh:
-        pickle.dump(dict(meta=meta, snapshots=snapshots), fh, protocol=4)
-    pd.DataFrame(attempts).to_csv(ATTEMPTS_PATH, index=False)
+    with open(dataset_path(coder), "wb") as fh:
+        pickle.dump(dict(meta=meta, snapshots=snapshots, quotes=quotes), fh, protocol=4)
+    pd.DataFrame(attempts).to_csv(attempts_path(coder), index=False)
 
     return meta
 
-def load_dataset():
+def _load(coder):
+    with open(dataset_path(coder), "rb") as fh:
+        return pickle.load(fh)
+
+def load_dataset(coder: str = DEFAULT_CODER):
     # (snapshots, meta), snapshot = dict
-    with open(DATASET_PATH, "rb") as fh:
-        d = pickle.load(fh)
+    # with open(DATASET_PATH, "rb") as fh:
+    #     d = pickle.load(fh)
+    d = _load(coder)
     return d["snapshots"], d["meta"]
 
-def load_attempts() -> pd.DataFrame:
-    return pd.read_csv(ATTEMPTS_PATH)
+def load_quotes(coder: str = DEFAULT_CODER) -> dict:
+    # {(pid, trial_index): [quote, ...]} in the order spoken. For snapshot s, the text heard so far is quotes[(s['pid'], s['trial_index'])][:s['n_comments']]
+    return _load(coder)["quotes"]
+
+def load_attempts(coder: str = DEFAULT_CODER) -> pd.DataFrame:
+    return pd.read_csv(attempts_path(coder))
 
 
 if __name__ == "__main__":

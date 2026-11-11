@@ -19,6 +19,7 @@ class Snapshot:
 
     n_backtracks: int = 0 # backtrack counts
     n_subgoals: int = 0 # subgoals counts
+    n_comments: int = 0 # how many quotes spoken
 
 @dataclass
 class AttemptSnapshots:
@@ -28,6 +29,7 @@ class AttemptSnapshots:
     solve_step: int = None # step that reaches 24, or last step + 1 if never stated
     goal_in_graph: bool = False # coded graph w/ edge into 24
     flags: list = field(default_factory=list) 
+    comments: list = field(default_factory=list) # quotes spoken so far, in order, doesn't include solving step
 
 # replay GraphBuilder recorded actions, want to copy graph after each explore operation
 def _replay(actions):
@@ -77,6 +79,7 @@ def snapshots_for_attempt(code: str, correct: float):
 
     k = 0
     n_back = n_sub = 0
+    comments = []
     position = None # current location
     for a, builder in _replay(g.actions):
         if a["type"] == "start":
@@ -89,6 +92,8 @@ def snapshots_for_attempt(code: str, correct: float):
             continue
         if a["type"] == "set_subgoal":
             n_sub += 1
+            if a.get("comment"):
+                comments.append(a["comment"]) # record quote
             continue
         if a["type"] != "explore_operation":
             continue
@@ -96,10 +101,13 @@ def snapshots_for_attempt(code: str, correct: float):
         k += 1
         if k > last_input:
             break
+        if a.get("comment"):
+            comments.append(a["comment"])
         gc = copy.deepcopy(builder.G)
         if solved:
             event, tte = 1, out.solve_step - k
         else:
             event, tte = 0, n_ops - k
-        out.snapshots.append(Snapshot(k, gc, tuple(a["resulting_state"]), event, tte, n_back, n_sub))
+        out.snapshots.append(Snapshot(k, gc, tuple(a["resulting_state"]), event, tte, n_back, n_sub, len(comments)))
+    out.comments = comments[: out.snapshots[-1].n_comments] if out.snapshots else []
     return out

@@ -33,10 +33,10 @@ def score(pred: pd.DataFrame, labels: pd.DataFrame = None) -> pd.DataFrame:
     usable, y = within_k_labels(m.event, m.time_to_event)
     m["usable"], m["y"] = usable, y
     rows = []
-    for (model, scheme, fold), g in m.groupby(["model", "scheme", "test_fold"]):
+    for (model, scheme, fold, seed), g in m.groupby(["model", "scheme", "test_fold", "seed"]): # seed aware, added for GRU
         u = g[g.usable]
         c = g[g.time_to_event > 0]
-        rows.append(dict(model=model, scheme=scheme, test_fold=fold,
+        rows.append(dict(model=model, scheme=scheme, test_fold=fold, seed=seed, 
                          auroc_within3=roc_auc_score(u.y, u.p_within3),
                          c_index=harrell_c(c.time_to_event, c.event, c.risk)))
     per_fold = pd.DataFrame(rows)
